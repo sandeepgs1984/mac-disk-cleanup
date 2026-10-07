@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="token" content="__TOKEN__">
+<title>Disk Cleanup</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand"><span class="logo">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+    </span>Disk Cleanup</div>
+    <span class="scanmeta" id="scanmeta"></span>
+    <div class="spacer"></div>
+    <button class="btn icon ghost" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+    <div class="split">
+      <button class="btn primary" id="scanBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+        Scan
+      </button>
+      <button class="btn" id="deepBtn" title="Also measures every top-level folder for the overview map (slower)">Deep scan</button>
+    </div>
+  </header>
+
+  <div id="progress" class="progress" hidden>
+    <span id="progressText">Scanning…</span>
+    <div class="bar"><i id="progressFill" style="width:0%"></i></div>
+    <span class="faint num" id="progressCount"></span>
+  </div>
+
+  <section class="hero">
+    <div class="card gauge-card">
+      <svg class="gauge" viewBox="0 0 230 128" aria-label="Disk usage gauge">
+        <path class="track" d="M15 118 A100 100 0 0 1 215 118" fill="none" stroke-width="18" stroke-linecap="round"/>
+        <path class="fill" id="gaugeFill" d="M15 118 A100 100 0 0 1 215 118" fill="none" stroke-width="18" stroke-linecap="round" stroke-dasharray="0 314"/>
+        <path class="reclaim" id="gaugeReclaim" d="M15 118 A100 100 0 0 1 215 118" fill="none" stroke-width="18" stroke-linecap="butt" stroke-dasharray="0 314"/>
+      </svg>
+      <div class="gauge-num num" id="freeNum">—</div>
+      <div class="gauge-sub" id="freeSub">free</div>
+      <div class="gauge-legend">
+        <span><i class="dot" style="background:var(--c1)"></i>Used</span>
+        <span><i class="dot" style="background:var(--safe)"></i>Safe to reclaim</span>
+      </div>
+    </div>
+    <div class="tiles">
+      <div class="card tile"><div class="label"><i class="dot" style="background:var(--safe)"></i>Safe to reclaim</div>
+        <div class="value num" id="tSafe">—</div><div class="hint" id="tSafeHint">regenerates automatically</div></div>
+      <div class="card tile"><div class="label"><i class="dot" style="background:var(--care)"></i>Needs a decision</div>
+        <div class="value num" id="tCare">—</div><div class="hint" id="tCareHint">loses state or needs an app quit</div></div>
+      <div class="card tile"><div class="label"><i class="dot" style="background:var(--c1)"></i>Freed so far</div>
+        <div class="value num" id="tFreed">—</div><div class="hint" id="tFreedHint">across all cleanups</div></div>
+      <div class="card tile wide">
+        <span class="label">Running now</span>
+        <div id="runningChips" class="cats" style="gap:6px"></div>
+        <span class="hint" id="runningHint"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="charts">
+    <div class="card chart-card">
+      <div class="chart-head"><h2 id="treemapTitle">What's taking the space</h2><span class="sub" id="treemapSub"></span></div>
+      <div class="treemap" id="treemap"></div>
+      <div class="legend" id="treemapLegend"></div>
+    </div>
+    <div class="card chart-card">
+      <div class="chart-head"><h2>Found, by tier</h2><span class="sub" id="donutSub"></span></div>
+      <div class="donut-wrap">
+        <svg class="donut" viewBox="0 0 150 150" id="donut"></svg>
+        <div class="donut-legend" id="donutLegend"></div>
+      </div>
+      <div class="chart-head" style="margin-top:6px"><h2 style="font-size:13px">Free space over time</h2><span class="sub" id="trendSub"></span></div>
+      <svg class="trend" id="trend" viewBox="0 0 400 64" preserveAspectRatio="none"></svg>
+    </div>
+  </section>
+
+  <div id="tiers"></div>
+
+  <section class="card panel" id="autoPanel">
+    <div class="panel-head">
+      <button class="switch" id="autoSwitch" role="switch" aria-checked="false" aria-label="Enable auto cleanup"></button>
+      <div><h2>Auto cleanup</h2><p>On a schedule, moves <b>safe-tier</b> items in the categories below to the Trash and notifies you. It never touches "needs a decision", personal, or in-use items.</p></div>
+      <span class="tag" id="scheduleTag" style="margin-left:auto"></span>
+    </div>
+    <div class="form">
+      <div class="field"><label>Frequency</label>
+        <select id="freq"><option value="daily">Every day</option><option value="weekly">Every week</option></select></div>
+      <div class="field" id="weekdayField"><label>Day</label>
+        <select id="weekday"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select></div>
+      <div class="field"><label>Time</label>
+        <select id="hour"></select></div>
+      <div class="field"><label>Notification</label>
+        <select id="notify"><option value="1">Notify after each run</option><option value="0">Silent</option></select></div>
+    </div>
+    <div class="field" style="margin-top:12px"><label>Categories auto cleanup may touch</label><div class="cats" id="autoCats"></div></div>
+    <div class="preview" id="autoPreview"></div>
+    <div class="runs" id="runs"></div>
+  </section>
+
+  <section class="card panel">
+    <div class="panel-head"><div><h2>Settings</h2><p>Paths listed here are skipped by every scan (one per line).</p></div></div>
+    <textarea id="excludes" rows="2" placeholder="~/Library/Caches/something-i-want-to-keep"></textarea>
+    <div style="display:flex; justify-content:flex-end; margin-top:8px"><button class="btn sm" id="saveExcludes">Save</button></div>
+  </section>
+
+  <footer class="faint" style="font-size:12px; text-align:center; margin-top:10px">
+    Runs only on this Mac at 127.0.0.1 · Trash moves are reversible until you empty the Trash · <span id="version"></span>
+  </footer>
+</div>
+
+<div class="actionbar" id="actionbar">
+  <span class="sum num" id="selSum">0 items</span>
+  <button class="btn ghost sm" id="selClear">Clear</button>
+  <button class="btn danger sm" id="deleteBtn" title="Skips the Trash — cannot be undone">Delete permanently</button>
+  <button class="btn primary" id="trashBtn">Move to Trash</button>
+</div>
+
+<div id="modalRoot"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
