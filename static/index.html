@@ -80,7 +80,30 @@
     </div>
   </section>
 
-  <div id="tiers"></div>
+  <div class="empty" id="noScan">Press <b>Scan</b> to look for reclaimable space. Nothing is deleted without you choosing it.</div>
+  <section class="listview" id="listview" hidden>
+    <div class="filters card">
+      <div class="seg" id="tierSeg" role="tablist" aria-label="Filter by tier"></div>
+      <div class="filters-row">
+        <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="q" placeholder="Search name or path" autocomplete="off"></label>
+        <select id="catSel" aria-label="Category"></select>
+        <select id="sortSel" aria-label="Sort">
+          <option value="size">Largest first</option>
+          <option value="age">Oldest first</option>
+          <option value="name">Name A–Z</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="readyOnly"> Ready to clean only</label>
+        <span class="filters-actions">
+          <span class="faint num" id="listSummary"></span>
+          <button class="btn sm ghost" id="selVisible">Select shown</button>
+          <button class="btn sm ghost" id="selNone">None</button>
+        </span>
+      </div>
+      <div class="tier-desc" id="filterDesc"></div>
+    </div>
+    <div class="items" id="list"></div>
+  </section>
 
   <section class="card panel" id="autoPanel">
     <div class="panel-head">

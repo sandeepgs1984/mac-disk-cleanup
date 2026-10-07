@@ -207,7 +207,7 @@
     $('#trendSub').textContent = `${gb(pts[0].free)} → ${gb(pts.at(-1).free)} GB free · ${delta >= 0 ? '+' : ''}${delta.toFixed(0)} GB over ${pts.length} scans`;
   }
 
-  // ---------- tiers & items ----------
+  // ---------- list view, filters & items ----------
   function tagsFor(f) {
     const tags = [];
     if (f.blocked_by?.length) tags.push(`<span class="tag warn">Quit ${esc(f.blocked_by.join(', '))} first</span>`);
@@ -218,31 +218,81 @@
     tags.push(`<span class="tag cat">${esc(f.category)}</span>`);
     return tags.join('');
   }
-  function renderTiers() {
-    const root = $('#tiers'); root.innerHTML = '';
-    if (!state.scan) { root.appendChild(el('<div class="empty">Press <b>Scan</b> to look for reclaimable space. Nothing is deleted without you choosing it.</div>')); return; }
-    for (const [tier, meta] of Object.entries(TIERS)) {
-      const list = byTier(tier); if (!list.length) continue;
-      const max = Math.max(...list.map((f) => f.bytes), 1);
-      const sel = list.filter((f) => f.selectable);
-      const sec = el(`<section class="tier" data-tier="${tier}">
-        <div class="tier-head"><span class="badge"></span><h2>${esc(meta.name)}</h2><span class="count">${list.length} items</span>
-          ${sel.length ? `<span class="actions"><button class="btn sm ghost" data-act="all">Select all</button><button class="btn sm ghost" data-act="none">None</button></span>` : ''}
-          <span class="total num">${fmt(sum(list))}</span></div>
-        <div class="tier-desc">${esc(meta.desc)}</div><div class="items"></div></section>`);
-      sec.querySelectorAll('[data-act]').forEach((b) => b.onclick = () => { sel.forEach((f) => b.dataset.act === 'all' ? state.selected.add(f.id) : state.selected.delete(f.id)); renderTiers(); renderActionBar(); });
-      const items = $('.items', sec);
-      for (const f of list) items.appendChild(renderItem(f, max));
-      root.appendChild(sec);
-    }
+  // Filter state. `tier` is 'all' or a tier key; `cat` is 'all' or a category name.
+  const filter = { tier: 'all', cat: 'all', q: '', sort: localStorage.getItem('sort') || 'size', readyOnly: false };
+  const FILTER_DESC = {
+    all: 'Everything the scan found, largest first. Safe items are preselected; locked and view-only items can’t be selected.',
+    ...Object.fromEntries(Object.entries(TIERS).map(([k, v]) => [k, v.desc])),
+  };
+  function visibleItems() {
+    const q = filter.q.trim().toLowerCase();
+    let list = findings().filter((f) =>
+      (filter.tier === 'all' || f.tier === filter.tier) &&
+      (filter.cat === 'all' || f.category === filter.cat) &&
+      (!filter.readyOnly || f.selectable) &&
+      (!q || f.title.toLowerCase().includes(q) || f.display.toLowerCase().includes(q) || f.category.toLowerCase().includes(q)));
+    if (filter.sort === 'name') list = [...list].sort((a, b) => a.title.localeCompare(b.title));
+    else if (filter.sort === 'age') list = [...list].sort((a, b) => (a.mtime || Infinity) - (b.mtime || Infinity));
+    else list = [...list].sort((a, b) => b.bytes - a.bytes);
+    return list;
   }
+  function renderFilters() {
+    const seg = $('#tierSeg'); seg.innerHTML = '';
+    const all = findings();
+    const segs = [['all', 'All', all], ...Object.keys(TIERS).map((t) => [t, TIERS[t].name, byTier(t)])];
+    for (const [key, name, list] of segs) {
+      if (key !== 'all' && !list.length && filter.tier !== key) continue;
+      const b = el(`<button role="tab" aria-pressed="${filter.tier === key}">
+        <span class="l">${key !== 'all' ? `<i class="dot" style="background:${TIERS[key].color};margin:0"></i>` : ''}${esc(name)}</span>
+        <span class="v">${list.length} · ${fmt(sum(list))}</span></button>`);
+      b.onclick = () => { filter.tier = key; renderList(); };
+      seg.appendChild(b);
+    }
+    const catSel = $('#catSel');
+    const cats = [...new Set(all.map((f) => f.category))].sort();
+    const counts = Object.fromEntries(cats.map((c) => [c, all.filter((f) => f.category === c).length]));
+    catSel.innerHTML = `<option value="all">All categories</option>` + cats.map((c) => `<option value="${esc(c)}">${esc(c)} (${counts[c]})</option>`).join('');
+    catSel.value = cats.includes(filter.cat) ? filter.cat : (filter.cat = 'all');
+    $('#sortSel').value = filter.sort; $('#readyOnly').checked = filter.readyOnly;
+    $('#filterDesc').textContent = FILTER_DESC[filter.tier];
+    document.querySelectorAll('.tile.clickable').forEach((t) => t.classList.toggle('active', t.dataset.tier === filter.tier));
+  }
+  function renderList() {
+    const root = $('#list'); root.innerHTML = '';
+    $('#listview').hidden = !state.scan; $('#noScan').hidden = !!state.scan;
+    if (!state.scan) return;
+    renderFilters();
+    const list = visibleItems();
+    const selectable = list.filter((f) => f.selectable);
+    $('#listSummary').textContent = `${list.length} item${list.length === 1 ? '' : 's'} · ${fmt(sum(list))}` + (selectable.length && selectable.length !== list.length ? ` · ${selectable.length} selectable` : '');
+    $('#selVisible').disabled = !selectable.length;
+    if (!list.length) {
+      root.appendChild(el(`<div class="empty">${findings().length ? 'Nothing matches these filters.' : 'Nothing found — this Mac is clean.'}</div>`));
+      return;
+    }
+    const max = Math.max(...list.map((f) => f.bytes), 1);
+    for (const f of list) root.appendChild(renderItem(f, max));
+  }
+  $('#q').oninput = (e) => { filter.q = e.target.value; renderList(); };
+  $('#catSel').onchange = (e) => { filter.cat = e.target.value; renderList(); };
+  $('#sortSel').onchange = (e) => { filter.sort = e.target.value; localStorage.setItem('sort', filter.sort); renderList(); };
+  $('#readyOnly').onchange = (e) => { filter.readyOnly = e.target.checked; renderList(); };
+  $('#selVisible').onclick = () => { visibleItems().filter((f) => f.selectable).forEach((f) => state.selected.add(f.id)); renderList(); renderActionBar(); };
+  $('#selNone').onclick = () => { state.selected.clear(); renderList(); renderActionBar(); };
+  for (const [tileId, tier] of [['tSafe', 'safe'], ['tCare', 'care']]) {
+    const tile = $('#' + tileId).closest('.tile');
+    tile.classList.add('clickable'); tile.dataset.tier = tier; tile.title = 'Show only these items';
+    tile.onclick = () => { filter.tier = filter.tier === tier ? 'all' : tier; renderList(); $('#listview').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === '/' && !/input|textarea|select/i.test(e.target.tagName)) { e.preventDefault(); $('#q').focus(); } });
   function renderItem(f, max) {
     const checked = state.selected.has(f.id);
     const canSel = f.selectable;
-    const row = el(`<div class="item ${checked ? 'selected' : ''} ${f.blocked_by.length ? 'blocked' : ''}" id="item-${f.id}">
+    const pill = filter.tier === 'all' ? `<span class="tierpill ${f.tier}"><i class="dot" style="background:currentColor;margin:0;width:7px;height:7px"></i>${esc(TIERS[f.tier].name)}</span>` : '';
+    const row = el(`<div class="item ${checked ? 'selected' : ''} ${f.blocked_by.length ? 'blocked' : ''}" id="item-${f.id}" data-tier="${f.tier}">
       <input type="checkbox" ${checked ? 'checked' : ''} ${canSel ? '' : 'disabled'} aria-label="Select ${esc(f.title)}">
       <div class="main">
-        <div class="title">${esc(f.title)} ${tagsFor(f)}</div>
+        <div class="title">${esc(f.title)} ${pill}${tagsFor(f)}</div>
         <div class="path"><code title="${esc(f.path)}">${esc(f.display)}</code>
           ${f.path.startsWith('pid:') ? '' : `<button class="btn sm ghost reveal" title="Reveal in Finder">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>`}
@@ -269,7 +319,7 @@
     $('#selSum').innerHTML = `${items.length} item${items.length === 1 ? '' : 's'} · ${fmt(sum(items))}` + (perm ? `<small>${perm} skip the Trash</small>` : '');
     $('#trashBtn').textContent = perm === items.length && perm ? 'Clean selected' : 'Move to Trash';
   }
-  $('#selClear').onclick = () => { state.selected.clear(); renderTiers(); renderActionBar(); };
+  $('#selClear').onclick = () => { state.selected.clear(); renderList(); renderActionBar(); };
   $('#trashBtn').onclick = () => confirmClean('trash');
   $('#deleteBtn').onclick = () => confirmClean('delete');
 
@@ -335,7 +385,7 @@
       $('#progressCount').textContent = `${s.done}/${s.total} · ${s.findings?.length || 0} found`;
       // progressive reveal
       state.scan = { ...(state.scan || {}), findings: (s.findings || []).sort((a, b) => b.bytes - a.bytes), finishedAt: null, overview: state.scan?.overview || [] };
-      renderTiers(); renderTreemap(); renderDonut(); renderHero();
+      renderList(); renderTreemap(); renderDonut(); renderHero();
       setTimeout(pollScan, 700); return;
     }
     if (s.error) toast(`Scan failed: ${s.error}`);
@@ -390,7 +440,7 @@
       state.lastScanKey = key; state.selected = new Set(byTier('safe').filter((f) => f.selectable).map((f) => f.id));
     } else { state.selected = new Set([...state.selected].filter((id) => findings().some((f) => f.id === id && f.selectable))); }
     $('#excludes').value = (s.settings.excludes || []).join('\n');
-    renderHero(); renderTreemap(); renderDonut(); renderTrend(); renderTiers(); renderActionBar(); renderAuto();
+    renderHero(); renderTreemap(); renderDonut(); renderTrend(); renderList(); renderActionBar(); renderAuto();
     if (s.scanning?.running) pollScan();
   }
   addEventListener('resize', () => renderTreemap());
