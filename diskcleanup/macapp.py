@@ -24,29 +24,19 @@ BUNDLE_ID = "com.sandeepgs.mac-disk-cleanup.app"
 
 LAUNCHER = f'''#!/bin/bash
 # Launcher for {APP_NAME}.app — starts the dashboard server (or reuses a running one) and opens it.
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/bin:$PATH"
 REPO="{ROOT}"
 LOG="$HOME/.disk-cleanup/app.log"
 mkdir -p "$HOME/.disk-cleanup"
 
-PY=""
-for c in python3 /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
-  if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
-    PY="$(command -v "$c")"; break
-  fi
-done
-if [ -z "$PY" ]; then
-  osascript -e 'display alert "{APP_NAME}" message "Python 3.10 or newer is required. Install it with: brew install python" as critical'
-  exit 1
-fi
-if [ ! -f "$REPO/cleanup.py" ]; then
-  osascript -e 'display alert "{APP_NAME}" message "The project folder has moved. Run  python3 cleanup.py install-app  from its new location." as critical'
+if [ ! -x "$REPO/bin/cleanup" ]; then
+  osascript -e 'display alert "{APP_NAME}" message "The project folder has moved. Run  bin/cleanup install-app  from its new location." as critical'
   exit 1
 fi
 
+# bin/cleanup picks the newest Python 3.9+ (and shows its own alert if there is none).
 # Detached, so Finder gets its launcher back immediately. serve() opens the browser itself and,
 # if a dashboard is already running on the port, just reopens it instead of starting another.
-nohup "$PY" "$REPO/cleanup.py" serve --idle-exit 15 >>"$LOG" 2>&1 &
+nohup "$REPO/bin/cleanup" serve --idle-exit 15 >>"$LOG" 2>&1 &
 disown
 '''
 

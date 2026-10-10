@@ -2,29 +2,31 @@
 
 A local dashboard that finds what is eating your Mac's disk, explains whether each item is safe to remove, and lets you clean it up — reversibly — from a web page. Built for developer Macs: it knows about Xcode build data, simulators, device symbols, editor caches, package managers, and the private build copies left behind by AI coding agents.
 
-Everything runs on your machine at `127.0.0.1`. No dependencies beyond the Python 3 that ships with macOS / Homebrew.
+Everything runs on your machine at `127.0.0.1`. No dependencies beyond Python 3.9+ — the copy that ships with macOS is enough.
 
 ## Run it
 
 ```bash
-python3 cleanup.py
+bin/cleanup
 ```
+
+(`bin/cleanup` finds the newest Python 3.9+ on the Mac and runs `cleanup.py` with it — so it keeps working when Homebrew upgrades Python. `python3 cleanup.py` works too.)
 
 That starts the server on port 7777 and opens the dashboard in your browser. Press **Scan**.
 
 Other commands:
 
 ```bash
-python3 cleanup.py scan            # print the findings as a table instead
-python3 cleanup.py scan --deep     # also measure every top-level folder for the overview map
-python3 cleanup.py auto --dry-run  # show what the scheduled cleanup would do
-python3 cleanup.py schedule status
+bin/cleanup scan            # print the findings as a table instead
+bin/cleanup scan --deep     # also measure every top-level folder for the overview map
+bin/cleanup auto --dry-run  # show what the scheduled cleanup would do
+bin/cleanup schedule status
 ```
 
 ### Install it as a Mac app
 
 ```bash
-python3 cleanup.py install-app
+bin/cleanup install-app
 ```
 
 This creates **Disk Cleanup.app** in `/Applications` (with its own icon). Double-click it — or find it in Spotlight / Launchpad — and the dashboard opens in your default browser. The app is a thin launcher that runs the code from this folder, so pulling new changes updates the app too; re-run `install-app` only if you move the folder. The server it starts quits on its own 15 minutes after the last dashboard tab is closed. If a dashboard is already running, launching again just opens it.
@@ -32,7 +34,7 @@ This creates **Disk Cleanup.app** in `/Applications` (with its own icon). Double
 Optional: add an alias so it is one word away in the terminal.
 
 ```bash
-echo 'alias cleanup="python3 \"$HOME/DEVELOPMENT DRIVE/GITHUB Projects/mac-disk-cleanup/cleanup.py\""' >> ~/.zshrc
+echo 'alias cleanup="\"$HOME/DEVELOPMENT DRIVE/GITHUB Projects/mac-disk-cleanup/bin/cleanup\""' >> ~/.zshrc
 ```
 
 ## How it decides what is safe

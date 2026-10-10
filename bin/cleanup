@@ -1,0 +1,21 @@
+#!/bin/bash
+# Runs cleanup.py with the newest Python 3.9+ on this Mac.
+# Used by Disk Cleanup.app, the launchd schedule, and the shell alias, so all three keep working
+# when Homebrew upgrades Python and renames/drops the unversioned `python3` link.
+set -u
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/bin:${PATH:-}"
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+
+best=""; best_ver=0
+for c in python3.14 python3.13 python3.12 python3.11 python3.10 python3 /usr/bin/python3; do
+  p="$(command -v "$c" 2>/dev/null)" || continue
+  v="$("$p" -c 'import sys; print(sys.version_info[0]*100 + sys.version_info[1])' 2>/dev/null)" || continue
+  if [ "$v" -ge 309 ] && [ "$v" -gt "$best_ver" ]; then best="$p"; best_ver="$v"; fi
+done
+
+if [ -z "$best" ]; then
+  msg="Python 3.9 or newer was not found. macOS normally ships one at /usr/bin/python3; otherwise: brew install python"
+  if [ -t 2 ]; then echo "$msg" >&2; else osascript -e "display alert \"Disk Cleanup\" message \"$msg\" as critical"; fi
+  exit 1
+fi
+exec "$best" "$REPO/cleanup.py" "$@"

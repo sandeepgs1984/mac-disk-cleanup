@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 import plistlib
-import sys
 
 from .model import HOME
 from .store import DIR, settings
@@ -30,7 +29,8 @@ def install() -> dict:
         interval["Weekday"] = int(s["weekday"])
     plist = {
         "Label": LABEL,
-        "ProgramArguments": [sys.executable, os.path.join(ROOT, "cleanup.py"), "auto"],
+        # bin/cleanup resolves Python at run time, so a Homebrew upgrade can't break the schedule.
+        "ProgramArguments": [os.path.join(ROOT, "bin", "cleanup"), "auto"],
         "StartCalendarInterval": interval,
         "RunAtLoad": False,
         "StandardOutPath": os.path.join(DIR, "launchd.log"),
